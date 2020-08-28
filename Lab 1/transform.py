@@ -40,9 +40,19 @@ def cs4243_resize(image, new_width, new_height):
     new_image = np.zeros((new_height, new_width, 3), dtype='uint8')
     if len(image.shape)==2:
         new_image = np.zeros((new_height, new_width), dtype='uint8')
-    ###Your code here####
-
-    ###
+    
+    # Get vertical and horizontal scaling factors
+    v_scale = new_height / image.shape[0]
+    h_scale = new_width / image.shape[1]
+    
+    # Map each pixel in the new image with a pixel in the old image
+    mapped_indices_i = np.floor(np.arange(new_height) / v_scale).astype(int)
+    mapped_indices_j = np.floor(np.arange(new_width) / h_scale).astype(int)
+    
+    for i in range(new_height):
+        for j in range(new_width):
+            new_image[i, j] = image[mapped_indices_i[i], mapped_indices_j[j]]
+    
     return new_image
 
 def cs4243_rgb2grey(image):
@@ -57,10 +67,10 @@ def cs4243_rgb2grey(image):
     if len(image.shape) != 3:
         print('RGB Image should have 3 channels')
         return
-    ###Your code here####
-
-    ###
-
+    
+    # Matrix mult of image (Hi, Wi, 3) and weights (3, 1) ==> new image of (Hi, Wi, 1)
+    weights = np.array([0.299, 0.587, 0.114])
+    image = np.dot(image, weights)
     return image/255.
 
 def cs4243_histnorm(image, grey_level=256):
@@ -73,12 +83,14 @@ def cs4243_histnorm(image, grey_level=256):
     Tips: use linear normalization here https://en.wikipedia.org/wiki/Normalization_(image_processing)
     """
     res_image = image.copy()
-    ##your code here ###
     
-    ####
+    # Get global min and max intensity value
+    min_level = res_image.min()
+    max_level = res_image.max()
+    
+    # Normalizes the intensity values to [0, grey_level - 1]
+    res_image = (res_image - min_level) / (max_level - min_level) * (grey_level - 1)
     return res_image
-
-
 
 def cs4243_histequ(image, grey_level=256):
     """
@@ -92,9 +104,10 @@ def cs4243_histequ(image, grey_level=256):
     :return: uni_hist: histogram of the enhanced image.
     Tips: use numpy buildin funcs to ease your work on image statistics
     """
-    ###your code here####
     
-    ###
+    ori_hist = np.histogram(image, grey_level, (0, grey_level - 1))[0]
+    cum_hist = np.cumsum(ori_hist) / (image.shape[0] * image.shape[1])
+    uniform_hist = 255 * cum_hist
 
     # Set the intensity of the pixel in the raw image to its corresponding new intensity 
     height, width = image.shape
@@ -123,9 +136,17 @@ def cs4243_histmatch(ori_image, refer_image):
     Tips: use cs4243_histequ to help you
     """
     
-    ##your code here ###
+    # Get PDF for original and ref images
+    ori_hist = np.histogram(ori_image, 256, (0, 255))[0]
+    ref_hist = np.histogram(refer_image, 256, (0, 255))[0]
     
-    ##
+    # Get CDF for original and ref images (x_axis = intensity val, y_axis = cumulative density)
+    cum_hist_ori = np.cumsum(ori_hist) / (ori_image.shape[0] * ori_image.shape[1])
+    cum_hist_ref = np.cumsum(ref_hist) / (refer_image.shape[0] * refer_image.shape[1])
+    
+    # Get new intensity values for original image by interpolating the original image CDF with the reference image CDF
+    map_value = np.interp(cum_hist_ori, cum_hist_ref, np.arange(len(cum_hist_ref)))
+    
     # Set the intensity of the pixel in the raw image to its corresponding new intensity      
     height, width = ori_image.shape
     res_image = np.zeros(ori_image.shape, dtype='uint8')  # Note the type of elements
@@ -163,9 +184,10 @@ def cs4243_gaussian_kernel(ksize, sigma):
     :return kernel: numpy.ndarray of shape (ksize, ksize)
     """
     kernel = np.zeros((ksize, ksize))
-    ###Your code here####
-
-    ###
+    x_mean = y_mean = ksize // 2
+    for i in range(ksize):
+        for j in range(ksize):
+            kernel[i, j] = np.exp(((i - x_mean) ** 2 + (j - y_mean) ** 2) / (-2 * (sigma ** 2)))
 
     return kernel / kernel.sum()
 
@@ -180,10 +202,20 @@ def cs4243_filter(image, kernel):
     Hi, Wi = image.shape
     Hk, Wk = kernel.shape
     filtered_image = np.zeros((Hi, Wi))
-
-    ###Your code here####
-
-    ###
+    
+    kernel_center_i = Hk // 2
+    kernel_center_j = Wk // 2
+    
+    # Implement convolution operation using L3 slide 29
+    for i in range(Hi):
+        for j in range(Wi):
+            x_ij = 0
+            for u in range(-kernel_center_i, kernel_center_i + 1):
+                for v in range(-kernel_center_j, kernel_center_j + 1):
+                    if (i - u) < 0 or (i - u) > 255 or (j - v) < 0 or (j - v) > 255:
+                        continue
+                    x_ij += kernel[kernel_center_i + u, kernel_center_j + v] * image[i - u, j - v]
+            filtered_image[i, j] = x_ij
 
     return filtered_image
 
@@ -219,9 +251,18 @@ def cs4243_filter_fast(image, kernel):
     Hk, Wk = kernel.shape
     filtered_image = np.zeros((Hi, Wi))
 
-    ###Your code here####
+    kernel_center_i = Hk // 2
+    kernel_center_j = Wk // 2
+
+    image = pad_zeros(image, kernel_center_i, kernel_center_j)
+    kernel = cs4243_rotate180(kernel)
     
-    ###
+    for i in range(Hi):
+        for j in range(Wi):
+            k = i + 2 * kernel_center_i + 1
+            l = j + 2 * kernel_center_j + 1
+            target = image[i:k, j:l]
+            filtered_image[i, j] = np.sum(target * kernel)
 
     return filtered_image
 
@@ -241,11 +282,22 @@ def cs4243_filter_faster(image, kernel):
     Hi, Wi = image.shape
     Hk, Wk = kernel.shape
     filtered_image = np.zeros((Hi, Wi))
-
-    ###Your code here####
     
-    ###
-
+    kernel = cs4243_rotate180(kernel).flatten()
+    kernel_center_i = Hk // 2
+    kernel_center_j = Wk // 2
+    image = pad_zeros(image, kernel_center_i, kernel_center_j)
+    
+    regions = []
+    for i in range(Hi):
+        for j in range(Wi):
+            k = i + 2 * kernel_center_i + 1
+            l = j + 2 * kernel_center_j + 1
+            target = image[i:k, j:l]
+            regions.append(target)
+    regions = np.array(regions).reshape((Hi*Wi, Hk*Wk))  
+    filtered_image = np.dot(regions, kernel).reshape((Hi, Wi))
+    
     return filtered_image
 
 def cs4243_downsample(image, ratio):
