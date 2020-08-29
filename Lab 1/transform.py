@@ -107,7 +107,7 @@ def cs4243_histequ(image, grey_level=256):
     
     ori_hist = np.histogram(image, grey_level, (0, grey_level - 1))[0]
     cum_hist = np.cumsum(ori_hist) / (image.shape[0] * image.shape[1])
-    uniform_hist = 255 * cum_hist
+    uniform_hist = (grey_level - 1) * cum_hist
 
     # Set the intensity of the pixel in the raw image to its corresponding new intensity 
     height, width = image.shape
@@ -135,18 +135,67 @@ def cs4243_histmatch(ori_image, refer_image):
     :return: res_hist: histogram of the enhanced image.
     Tips: use cs4243_histequ to help you
     """
-    
-    # Get PDF for original and ref images
-    ori_hist = np.histogram(ori_image, 256, (0, 255))[0]
-    ref_hist = np.histogram(refer_image, 256, (0, 255))[0]
-    
-    # Get CDF for original and ref images (x_axis = intensity val, y_axis = cumulative density)
-    cum_hist_ori = np.cumsum(ori_hist) / (ori_image.shape[0] * ori_image.shape[1])
-    cum_hist_ref = np.cumsum(ref_hist) / (refer_image.shape[0] * refer_image.shape[1])
-    
-    # Get new intensity values for original image by interpolating the original image CDF with the reference image CDF
-    map_value = np.interp(cum_hist_ori, cum_hist_ref, np.arange(len(cum_hist_ref)))
-    
+    def find_nearest(array, value):
+        array = np.asarray(array)
+        idx = (np.abs(array - value)).argmin()
+        return array[idx]
+
+    # Get PDF, CDF for original and ref images (x_axis = intensity val, y_axis = cumulative density)
+    grey_level = 256
+    ori_hist, cum_hist_ori, _, _ = cs4243_histequ(ori_image, grey_level)
+    ref_hist, cum_hist_ref, _, _ = cs4243_histequ(refer_image, grey_level)
+
+    # Get proportion to intensity value mapping of refer image
+    p2i_ref = {}
+    for intensity_val, proportion in enumerate(cum_hist_ref):
+        if proportion not in p2i_ref:
+            p2i_ref[proportion] = intensity_val
+
+    map_value = np.zeros(grey_level, dtype='uint8')
+    for intensity_val, proportion in enumerate(cum_hist_ori):
+        if proportion not in p2i_ref:
+            # Find the nearest value if there is no exact match
+            proportion = find_nearest(cum_hist_ref, proportion)
+
+        map_value[intensity_val] = p2i_ref[proportion]
+
+    # the mappings that got issue
+    # map_value[31] = 3         # mine maps to 4
+    # map_value[194] = 215      # mine maps to 216
+    # map_value[195] = 215      # mine maps to 216
+
+    map_value_ans = [0, 0, 0, 0, 0, 0, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+                     0, 0, 0, 0, 0, 0, 0,   0,   0,   1,   2,   2,   2,   3,   5,   5,   6,   6,
+                     7, 8, 8, 9, 9, 11, 12,  12,  13,  15,  15,  16,  16,  17,  18,  21,  21,  21,
+                     22, 22, 23, 23, 24, 24, 25,  25,  25,  25,  25,  27,  27,  28,  28,  28,  29,  29,
+                     30, 30, 31, 31, 31, 32, 32,  32,  34,  34,  35,  35,  35,  35,  38,  38,  38,  41,
+                     41, 42, 43, 44, 46, 47, 48,  52,  53,  53,  56,  59,  61,  63,  64,  65,  67,  67,
+                     72, 73, 74, 75, 76, 78, 78,  82,  85,  85,  91,  92,  95, 102, 106, 110, 116, 117,
+                     121, 131, 131, 136, 137, 137, 148, 152, 154, 156, 156, 160, 164, 174, 174, 178, 179, 179,
+                     181, 182, 185, 186, 188, 190, 192, 194, 195, 197, 197, 198, 198, 201, 202, 203, 203, 203,
+                     204, 205, 205, 206, 206, 207, 207, 208, 208, 208, 210, 210, 210, 210, 211, 211, 211, 212,
+                     212, 212, 212, 212, 213, 213, 213, 214, 214, 214, 214, 215, 215, 215, 215, 215, 216, 217,
+                     217, 218, 218, 218, 221, 221, 223, 224, 224, 229, 229, 230, 230, 235, 235, 235, 236, 236,
+                     236, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                     255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+                     255, 255, 255, 255]
+
+    for from_i, to_i in enumerate(map_value):
+        if to_i != map_value_ans[from_i]:
+            print("from:", from_i, "to:", to_i, "ans:", map_value_ans[from_i])
+
+    print("31 to 4 instead of 3")
+    for i in range(3, 5):
+        print("ref_g/s_val:", i, "ref_cdf:", cum_hist_ref[i], "diff:", cum_hist_ref[i] - cum_hist_ori[31])
+
+    print("194 to 216 instead of 215")
+    for i in range(215, 217):
+        print("ref_g/s_val:", i, "ref_cdf:", cum_hist_ref[i], "diff:", cum_hist_ref[i] - cum_hist_ori[194])
+
+    print("194 to 216 instead of 215")
+    for i in range(215, 217):
+        print("ref_g/s_val:", i, "ref_cdf:", cum_hist_ref[i], "diff:", cum_hist_ref[i] - cum_hist_ori[195])
+
     # Set the intensity of the pixel in the raw image to its corresponding new intensity      
     height, width = ori_image.shape
     res_image = np.zeros(ori_image.shape, dtype='uint8')  # Note the type of elements
