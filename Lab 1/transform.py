@@ -358,10 +358,13 @@ def cs4243_gauss_pyramid(image, n=4):
 	The kernel for blur is given, do not change it.
     """
     kernel = cs4243_gaussian_kernel(7, 1)
-    pyramid = []
-    ## your code here####
-    
-    ##
+    pyramid = [image]
+
+    for _ in range(n):
+        image = cs4243_filter_faster(image, kernel)
+        image = cs4243_downsample(image, 2)
+        pyramid.append(image)
+
     return pyramid
 
 def cs4243_lap_pyramid(gauss_pyramid):
@@ -377,10 +380,18 @@ def cs4243_lap_pyramid(gauss_pyramid):
     kernel = cs4243_gaussian_kernel(7, 1)
     n = len(gauss_pyramid)
     lap_pyramid = [gauss_pyramid[n-1]] # the top layer is same as Gaussian Pyramid
-    ## your code here####
-    
-    ##
-    
+
+    # Scale kernel to compensate the 0s in the image after upsampling
+    kernel = kernel * 4
+
+    for i in reversed(range(n-1)):
+        curr_lvl = gauss_pyramid[i+1]
+        curr_lvl = cs4243_upsample(curr_lvl, 2)
+        curr_lvl = cs4243_filter_faster(curr_lvl, kernel)
+
+        prev_lvl = gauss_pyramid[i]
+        lap_pyramid.append(prev_lvl - curr_lvl)
+
     return lap_pyramid
     
 def cs4243_Lap_blend(A, B, mask):
@@ -395,8 +406,37 @@ def cs4243_Lap_blend(A, B, mask):
     """
     kernel = cs4243_gaussian_kernel(7, 1)
     blended_image = None
-    ## your code here####
-    
-    ##
-    
+
+    n = 3 # forum says no. of levels should be 3
+    la = cs4243_lap_pyramid(cs4243_gauss_pyramid(A, n))
+    lb = cs4243_lap_pyramid(cs4243_gauss_pyramid(B, n))
+    gr = cs4243_gauss_pyramid(mask, n)[::-1]
+
+    lap_blended = []
+    for a, b, ra in zip(la, lb, gr):
+        rb = np.ones_like(ra) - ra
+        blended = a * ra + b * rb
+        lap_blended.append(blended)
+
+    # =========================== DEBUG ===========================
+    if np.max(np.abs(reconstruct_lap_pyramid(la, kernel) - A)) < 1e-10:
+        print("reconstruct_lap_pyramid works.")
+
+    if np.max(np.abs(reconstruct_lap_pyramid(lb, kernel) - B)) < 1e-10:
+        print("reconstruct_lap_pyramid works.")
+    # =========================== DEBUG ===========================
+
+    blended_image = reconstruct_lap_pyramid(lap_blended, kernel)
+
     return blended_image
+
+def reconstruct_lap_pyramid(lap_pyramid, kernel):
+    # Scale kernel to compensate the 0s in the image after upsampling
+    kernel = kernel * 4
+    image = lap_pyramid[0]
+    for lap_img in lap_pyramid[1:]:
+        image = cs4243_upsample(image, 2)
+        image = cs4243_filter_faster(image, kernel)
+        image += lap_img
+
+    return image
