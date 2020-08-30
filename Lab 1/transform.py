@@ -224,9 +224,18 @@ def cs4243_filter(image, kernel):
             x_ij = 0
             for u in range(-kernel_center_i, kernel_center_i + 1):
                 for v in range(-kernel_center_j, kernel_center_j + 1):
-                    if (i - u) < 0 or (i - u) > 255 or (j - v) < 0 or (j - v) > 255:
+                    img_i = i - u
+                    img_j = j - v
+                    knl_i = kernel_center_i + u
+                    knl_j = kernel_center_j + v
+
+                    if img_i < 0 or img_i >= Hi or img_j < 0 or img_j >= Wi:
                         continue
-                    x_ij += kernel[kernel_center_i + u, kernel_center_j + v] * image[i - u, j - v]
+
+                    f_uv = kernel[knl_i, knl_j]
+                    p_ij = image[img_i, img_j]
+                    x_ij += f_uv * p_ij
+
             filtered_image[i, j] = x_ij
 
     return filtered_image
@@ -271,9 +280,7 @@ def cs4243_filter_fast(image, kernel):
     
     for i in range(Hi):
         for j in range(Wi):
-            k = i + 2 * kernel_center_i + 1
-            l = j + 2 * kernel_center_j + 1
-            target = image[i:k, j:l]
+            target = image[i:i+Hk, j:j+Wk]
             filtered_image[i, j] = np.sum(target * kernel)
 
     return filtered_image
@@ -303,9 +310,7 @@ def cs4243_filter_faster(image, kernel):
     regions = []
     for i in range(Hi):
         for j in range(Wi):
-            k = i + 2 * kernel_center_i + 1
-            l = j + 2 * kernel_center_j + 1
-            target = image[i:k, j:l]
+            target = image[i:i+Hk, j:j+Wk]
             regions.append(target)
     regions = np.array(regions).reshape((Hi*Wi, Hk*Wk))  
     filtered_image = np.dot(regions, kernel).reshape((Hi, Wi))
