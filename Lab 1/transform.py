@@ -41,18 +41,15 @@ def cs4243_resize(image, new_width, new_height):
     if len(image.shape)==2:
         new_image = np.zeros((new_height, new_width), dtype='uint8')
     
-    # Get vertical and horizontal scaling factors
-    v_scale = new_height / image.shape[0]
-    h_scale = new_width / image.shape[1]
-    
+    # ============= Your code here ============= #
     # Map each pixel in the new image with a pixel in the old image
-    mapped_indices_i = np.floor(np.arange(new_height) / v_scale).astype(int)
-    mapped_indices_j = np.floor(np.arange(new_width) / h_scale).astype(int)
+    mapped_indices_i = np.floor(np.arange(new_height) * image.shape[0] / new_height).astype(np.int)
+    mapped_indices_j = np.floor(np.arange(new_width) * image.shape[1] / new_width).astype(np.int)
     
     for i in range(new_height):
         for j in range(new_width):
             new_image[i, j] = image[mapped_indices_i[i], mapped_indices_j[j]]
-    
+    # ========================================= #
     return new_image
 
 def cs4243_rgb2grey(image):
@@ -68,9 +65,12 @@ def cs4243_rgb2grey(image):
         print('RGB Image should have 3 channels')
         return
     
+    # ============= Your code here ============= #
     # Matrix mult of image (Hi, Wi, 3) and weights (3, 1) ==> new image of (Hi, Wi, 1)
     weights = np.array([0.299, 0.587, 0.114])
     image = np.dot(image, weights)
+    # ========================================= #
+
     return image/255.
 
 def cs4243_histnorm(image, grey_level=256):
@@ -84,13 +84,18 @@ def cs4243_histnorm(image, grey_level=256):
     """
     res_image = image.copy()
     
+    # ============= Your code here ============= #
     # Get global min and max intensity value
     min_level = res_image.min()
     max_level = res_image.max()
     
     # Normalizes the intensity values to [0, grey_level - 1]
     res_image = (res_image - min_level) / (max_level - min_level) * (grey_level - 1)
+    # ========================================= #
+    
     return res_image
+
+
 
 def cs4243_histequ(image, grey_level=256):
     """
@@ -104,10 +109,11 @@ def cs4243_histequ(image, grey_level=256):
     :return: uni_hist: histogram of the enhanced image.
     Tips: use numpy buildin funcs to ease your work on image statistics
     """
-    
+    # ============= Your code here ============= #
     ori_hist = np.histogram(image, grey_level, (0, grey_level - 1))[0]
     cum_hist = np.cumsum(ori_hist) / (image.shape[0] * image.shape[1])
     uniform_hist = (grey_level - 1) * cum_hist
+    # ========================================= #
 
     # Set the intensity of the pixel in the raw image to its corresponding new intensity 
     height, width = image.shape
@@ -135,6 +141,8 @@ def cs4243_histmatch(ori_image, refer_image):
     :return: res_hist: histogram of the enhanced image.
     Tips: use cs4243_histequ to help you
     """
+    
+    # ============= Your code here ============= #
     def find_nearest(array, value):
         array = np.asarray(array)
         idx = (np.abs(array - value)).argmin()
@@ -158,7 +166,8 @@ def cs4243_histmatch(ori_image, refer_image):
             proportion = find_nearest(cum_hist_ref, proportion)
 
         map_value[intensity_val] = p2i_ref[proportion]
-
+    # ========================================= #
+    
     # Set the intensity of the pixel in the raw image to its corresponding new intensity      
     height, width = ori_image.shape
     res_image = np.zeros(ori_image.shape, dtype='uint8')  # Note the type of elements
@@ -196,10 +205,13 @@ def cs4243_gaussian_kernel(ksize, sigma):
     :return kernel: numpy.ndarray of shape (ksize, ksize)
     """
     kernel = np.zeros((ksize, ksize))
+    
+    # ============= Your code here ============= #
     x_mean = y_mean = ksize // 2
     for i in range(ksize):
         for j in range(ksize):
             kernel[i, j] = np.exp(((i - x_mean) ** 2 + (j - y_mean) ** 2) / (-2 * (sigma ** 2)))
+    # ========================================= #
 
     return kernel / kernel.sum()
 
@@ -214,7 +226,8 @@ def cs4243_filter(image, kernel):
     Hi, Wi = image.shape
     Hk, Wk = kernel.shape
     filtered_image = np.zeros((Hi, Wi))
-    
+
+    # ============= Your code here ============= #
     kernel_center_i = Hk // 2
     kernel_center_j = Wk // 2
     
@@ -237,6 +250,7 @@ def cs4243_filter(image, kernel):
                     x_ij += f_uv * p_ij
 
             filtered_image[i, j] = x_ij
+    # ========================================= #
 
     return filtered_image
 
@@ -272,6 +286,7 @@ def cs4243_filter_fast(image, kernel):
     Hk, Wk = kernel.shape
     filtered_image = np.zeros((Hi, Wi))
 
+    # ============= Your code here ============= #
     kernel_center_i = Hk // 2
     kernel_center_j = Wk // 2
 
@@ -282,6 +297,7 @@ def cs4243_filter_fast(image, kernel):
         for j in range(Wi):
             target = image[i:i+Hk, j:j+Wk]
             filtered_image[i, j] = np.sum(target * kernel)
+    # ========================================= #
 
     return filtered_image
 
@@ -301,7 +317,8 @@ def cs4243_filter_faster(image, kernel):
     Hi, Wi = image.shape
     Hk, Wk = kernel.shape
     filtered_image = np.zeros((Hi, Wi))
-    
+
+    # ============= Your code here ============= #
     kernel = cs4243_rotate180(kernel).flatten()
     kernel_center_i = Hk // 2
     kernel_center_j = Wk // 2
@@ -314,7 +331,8 @@ def cs4243_filter_faster(image, kernel):
             regions.append(target)
     regions = np.array(regions).reshape((Hi*Wi, Hk*Wk))  
     filtered_image = np.dot(regions, kernel).reshape((Hi, Wi))
-    
+    # ========================================= #
+
     return filtered_image
 
 def cs4243_downsample(image, ratio):
@@ -346,7 +364,7 @@ def cs4243_upsample(image, ratio):
     return res_image
 
 
-def cs4243_gauss_pyramid(image, n=4):
+def cs4243_gauss_pyramid(image, n=3):
     """
     10 points
     build a Gaussian Pyramid of level n
@@ -358,13 +376,16 @@ def cs4243_gauss_pyramid(image, n=4):
 	The kernel for blur is given, do not change it.
     """
     kernel = cs4243_gaussian_kernel(7, 1)
-    pyramid = [image]
-
-    for _ in range(n):
-        image = cs4243_filter_faster(image, kernel)
-        image = cs4243_downsample(image, 2)
-        pyramid.append(image)
-
+    pyramid = []
+    
+    # ============= Your code here ============= #
+    pyramid.append(image)
+    for i in range(n):
+        temp_image = cs4243_filter_faster(pyramid[i], kernel)
+        temp_image = cs4243_downsample(temp_image, 2)
+        pyramid.append(temp_image)
+    # ========================================= #
+    
     return pyramid
 
 def cs4243_lap_pyramid(gauss_pyramid):
@@ -380,9 +401,9 @@ def cs4243_lap_pyramid(gauss_pyramid):
     kernel = cs4243_gaussian_kernel(7, 1)
     n = len(gauss_pyramid)
     lap_pyramid = [gauss_pyramid[n-1]] # the top layer is same as Gaussian Pyramid
-
-    # Scale kernel to compensate the 0s in the image after upsampling
-    kernel = kernel * 4
+    
+    # ============= Your code here ============= #
+    kernel = kernel * 4.0
 
     for i in reversed(range(n-1)):
         curr_lvl = gauss_pyramid[i+1]
@@ -391,7 +412,8 @@ def cs4243_lap_pyramid(gauss_pyramid):
 
         prev_lvl = gauss_pyramid[i]
         lap_pyramid.append(prev_lvl - curr_lvl)
-
+    # ========================================= #
+    
     return lap_pyramid
     
 def cs4243_Lap_blend(A, B, mask):
@@ -406,37 +428,28 @@ def cs4243_Lap_blend(A, B, mask):
     """
     kernel = cs4243_gaussian_kernel(7, 1)
     blended_image = None
-
-    n = 3 # forum says no. of levels should be 3
-    la = cs4243_lap_pyramid(cs4243_gauss_pyramid(A, n))
-    lb = cs4243_lap_pyramid(cs4243_gauss_pyramid(B, n))
-    gr = cs4243_gauss_pyramid(mask, n)[::-1]
-
+    
+    # ============= Your code here ============= #
+    def reconstruct_lap_pyramid(lap_pyramid, kernel):
+        # Scale kernel to compensate the 0s in the image after upsampling
+        kernel = kernel * 4.0
+        image = lap_pyramid[0]
+        for i in range(1, len(lap_pyramid)):
+            temp_image = cs4243_upsample(image, 2)
+            temp_image = cs4243_filter_faster(temp_image, kernel)
+            image = temp_image + lap_pyramid[i]
+        return image
+    
+    la = cs4243_lap_pyramid(cs4243_gauss_pyramid(A))
+    lb = cs4243_lap_pyramid(cs4243_gauss_pyramid(B))
+    gr = list(reversed(cs4243_gauss_pyramid(mask)))
+    
     lap_blended = []
     for a, b, ra in zip(la, lb, gr):
-        rb = np.ones_like(ra) - ra
-        blended = a * ra + b * rb
+        blended = ra * a + (1.0 - ra) * b
         lap_blended.append(blended)
 
-    # =========================== DEBUG ===========================
-    if np.max(np.abs(reconstruct_lap_pyramid(la, kernel) - A)) < 1e-10:
-        print("reconstruct_lap_pyramid works.")
-
-    if np.max(np.abs(reconstruct_lap_pyramid(lb, kernel) - B)) < 1e-10:
-        print("reconstruct_lap_pyramid works.")
-    # =========================== DEBUG ===========================
-
     blended_image = reconstruct_lap_pyramid(lap_blended, kernel)
-
+    # ========================================= #
+    
     return blended_image
-
-def reconstruct_lap_pyramid(lap_pyramid, kernel):
-    # Scale kernel to compensate the 0s in the image after upsampling
-    kernel = kernel * 4
-    image = lap_pyramid[0]
-    for lap_img in lap_pyramid[1:]:
-        image = cs4243_upsample(image, 2)
-        image = cs4243_filter_faster(image, kernel)
-        image += lap_img
-
-    return image
