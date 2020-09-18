@@ -26,7 +26,7 @@ def smoothing(img):
     """
 
     """ YOUR CODE STARTS HERE """
-
+    img_smoothed = cv2.GaussianBlur(img, (5, 5), 5)
     """ YOUR CODE ENDS HERE """
 
     return img_smoothed
@@ -44,7 +44,7 @@ def RGBtoLab(img):
     """
 
     """ YOUR CODE STARTS HERE """
-
+    lab = color.rgb2lab(img)
     """ YOUR CODE ENDS HERE """
    
     return lab
@@ -68,10 +68,39 @@ def k_means_clustering(data,k):
     """
     start = time()
 
-
     """ YOUR CODE STARTS HERE """
+    
+    # Randomly pick k centers
+    centers = []
+    for _ in range(k):
+        i = random.randint(0, len(data) - 1)
+        centers.append(data[i])
+    centers = np.array(centers)
+    
+    iter_limit = 50
+    threshold_per_center = 1e-4
+    labels = np.zeros(len(data), dtype = int)
+    
+    for _ in range(iter_limit):
+        
+        # Assign each point in data to a center
+        for i in range(len(data)):
+            p_i = data[i]
+            y_i = np.argmin(np.sum(np.square(p_i - centers), axis = 1))
+            labels[i] = y_i
 
-
+        # Calculate new center based on labelling
+        iter_distance = 0
+        for i in range(k):
+            data_i = data[labels == i]
+            new_center = np.average(data_i, axis = 0)
+            distance = np.sqrt(np.sum(np.square(new_center - centers[i])))
+            iter_distance += distance
+            centers[i] = new_center
+        
+        # Terminate if centers move less than threshold
+        if iter_distance < threshold_per_center * k:
+            break
 
     """ YOUR CODE ENDS HERE """
 
@@ -212,8 +241,16 @@ def k_means_segmentation(img, k):
     """
 
     """ YOUR CODE STARTS HERE """
+    img = img / 255.
     
-
+    if len(img.shape) == 2:
+        H, W = img.shape
+        data = img.reshape(H*W, 1)
+    else:
+        H, W, C = img.shape
+        data = img.reshape(H*W, C)
+    
+    labels, centers = k_means_clustering(data, k)
     """ YOUR CODE ENDS HERE """
 
     return labels,centers
