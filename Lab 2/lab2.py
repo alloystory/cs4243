@@ -127,9 +127,14 @@ def get_bin_seeds(data, bin_size, min_bin_freq=1):
 
     """ YOUR CODE STARTS HERE """
     
+    bin_seeds = []
+    compressed = np.round(data / bin_size)
+    seeds, counts = np.unique(compressed, axis=0, return_counts=True)
+    reprojected = seeds * bin_size
+    for seed, count in zip(reprojected, counts):
+        if count >= min_bin_freq:
+            bin_seeds.append(seed)
     
-
-
     """ YOUR CODE ENDS HERE """
     return bin_seeds
 
@@ -154,6 +159,25 @@ def mean_shift_single_seed(start_seed, data, nbrs, max_iter):
 
     """ YOUR CODE STARTS HERE """
     
+    peak, neighbors = start_seed, None
+    neigh = NearestNeighbors(radius=bandwidth)
+    neigh.fit(data)
+
+    for _ in range(max_iter):
+        indices = neigh.radius_neighbors([peak], return_distance=False)[0]
+        neighbors = data[indices]
+
+        new_peak = np.average(neighbors, axis = 0)
+        distance = np.sqrt(np.sum(np.square(peak - new_peak)))
+        
+        peak = new_peak
+
+        if distance < stop_thresh:
+            break
+
+    peak = tuple(peak)
+    n_points = len(neighbors)
+
     """ YOUR CODE ENDS HERE """
 
     return peak, n_points
@@ -206,8 +230,30 @@ def mean_shift_clustering(data, bandwidth=0.7, min_bin_freq=5, max_iter=300):
 
     """ YOUR CODE STARTS HERE """
 
-    
+    removed_centers = set()
+    potential_centers = np.array(list(center_intensity_dict.keys()))
 
+    neigh = NearestNeighbors(radius=bandwidth)
+    neigh.fit(potential_centers)
+
+    for center in potential_centers:
+        ### find neighbor centers within bandwidth
+        indices = neigh.radius_neighbors([center], return_distance=False)[0]
+        neighbors = potential_centers[indices]
+
+        ### find the center with highest count
+        count_to_centers = {center_intensity_dict[tuple(center)]: tuple(center) for center in neighbors}
+        center_w_largest_count = count_to_centers[max(count_to_centers)]
+
+        ### add the rest into removed_centers 
+        for center in neighbors:
+            if tuple(center) != center_w_largest_count:
+                removed_centers.add(tuple(center))
+
+    ### remove centers that are in removed_centers from potential_centers
+    centers = np.array([center for center in potential_centers if tuple(center) not in removed_centers])
+
+    labels = np.array([np.argmin(np.sum(np.square(p_i - centers), axis = 1)) for p_i in data])
 
     """ YOUR CODE ENDS HERE """
     end =  time()
@@ -273,6 +319,14 @@ def mean_shift_segmentation(img,b):
 
     """ YOUR CODE STARTS HERE """
     
+    if len(img.shape) == 2:
+        H, W = img.shape
+        data = img.reshape(H*W, 1)
+    else:
+        H, W, C = img.shape
+        data = img.reshape(H*W, C)
+    
+    labels, centers = mean_shift_clustering(data=data, bandwidth=b)
     
     """ YOUR CODE ENDS HERE """
 
