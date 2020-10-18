@@ -124,7 +124,47 @@ def compute_homography(src, dst):
     h_matrix = np.eye(3, dtype=np.float64)
 
     ### YOUR CODE HERE
-    raise NotImplementedError() # Delete this line
+    N = src.shape[0]
+    h_src = pad(src)
+    h_dst = pad(dst)
+    
+    # Finding the transformation T that normalises the points
+    # Compute based on link given in lecture slides
+    m_src = np.average(h_src, axis = 0)
+    s_src = np.std(h_src, axis = 0) / np.sqrt(2)
+    m_dst = np.average(h_dst, axis = 0)
+    s_dst = np.std(h_dst, axis = 0) / np.sqrt(2)
+    
+    T_src = np.array([
+        [1/s_src[0], 0,          -m_src[0]/s_src[0]],
+        [0,          1/s_src[1], -m_src[1]/s_src[1]],
+        [0,          0,          1]
+    ])
+    T_dst = np.array([
+        [1/s_dst[0], 0,          -m_dst[0]/s_dst[0]],
+        [0,          1/s_dst[1], -m_dst[1]/s_dst[1]],
+        [0,          0,          1]
+    ])
+    
+    norm_src = np.dot(h_src, T_src.transpose())
+    norm_dst = np.dot(h_dst, T_dst.transpose())
+    
+    # Standard DLT
+    # Setting up matrix A
+    A = np.zeros((2*N, 9))
+    for i in range(N):
+        x_src, y_src = norm_src[i][0], norm_src[i][1]
+        x_dst, y_dst = norm_dst[i][0], norm_dst[i][1]
+        A[2*i] = [-x_src, -y_src, -1, 0, 0, 0, x_src*x_dst, y_src*x_dst, x_dst]
+        A[2*i+1] = [0, 0, 0, -x_src, -y_src, -1, x_src*y_dst, y_src*y_dst, y_dst]
+    
+    # Performing SVD on A
+    u, s, vh = np.linalg.svd(A, full_matrices = True)
+    h = vh[s.argmin()]
+    H = h.reshape((3, 3)).transpose()
+    
+    # Denormalising data
+    h_matrix = np.linalg.multi_dot([np.linalg.inv(T_dst), H, T_src])
     ### END YOUR CODE
 
     return h_matrix
@@ -153,11 +193,32 @@ def harris_corners(img, window_size=3, k=0.04):
     response = np.zeros((H, W))
 
     ### YOUR CODE HERE
-    raise NotImplementedError() # Delete this line
+    # Finding image gradients
+    I_x = filters.sobel_v(img)
+    I_y = filters.sobel_h(img)
+    
+    I_x2 = I_x ** 2
+    I_y2 = I_y ** 2
+    I_xy = I_x * I_y
+    
+    # Finding sum of gradients in each window
+    A = convolve(I_x2, window)
+    B = convolve(I_xy, window)
+    C = convolve(I_y2, window)
+    
+    # Finding response
+    for i in range(H):
+        for j in range(W):
+            M = np.array([
+                [A[i, j], B[i, j]],
+                [B[i, j], C[i, j]]
+            ])
+            det = np.linalg.det(M)
+            trace = np.trace(M)
+            response[i, j] = det - (k * (trace ** 2))
     ### END YOUR CODE
 
     return response
-
 
 def simple_descriptor(patch):
     """
@@ -179,7 +240,13 @@ def simple_descriptor(patch):
     """
     feature = []
     ### YOUR CODE HERE
-    raise NotImplementedError() # Delete this line
+    h, w = patch.shape
+    feature = patch.reshape(h * w)
+    sigma = feature.std()
+    mean = feature.mean()
+    feature = feature - mean
+    if sigma > 0:
+        feature = feature / sigma
     ### END YOUR CODE
     return feature
 
@@ -207,7 +274,6 @@ def describe_keypoints(image, keypoints, desc_func, patch_size=16):
         desc.append(desc_func(patch))
     return np.array(desc)
 
-
 def match_descriptors(desc1, desc2, threshold=0.5):
     """
     Match the feature descriptors by finding distances between them. A match is formed 
@@ -227,9 +293,27 @@ def match_descriptors(desc1, desc2, threshold=0.5):
     
     N = desc1.shape[0]
     dists = cdist(desc1, desc2)
+    printed = False
 
     ### YOUR CODE HERE
-    raise NotImplementedError() # Delete this line
+    
+    for i in range(N):
+        dist_1_2 = dists[i]
+        
+        # Distance to the closest vector
+        a_j = dist_1_2.argmin()
+        a = dist_1_2[a_j]
+        dist_1_2[a_j] = float("inf")
+        
+        # Distance to the second-closest vector
+        b_j = dist_1_2.argmin()
+        b = dist_1_2[b_j]
+        
+        ratio = a / b
+        if ratio < threshold:
+            matches.append([i, a_j])
+    matches = np.array(matches)
+    
     ### END YOUR CODE
     
     return matches
@@ -270,7 +354,49 @@ def ransac(keypoints1, keypoints2, matches, sampling_ratio=0.5, n_iters=500, thr
 
     # RANSAC iteration start
     ### YOUR CODE HERE
-    raise NotImplementedError() # Delete this line
+    keypoints1[:, [0, 1]] = keypoints1[:, [1, 0]]
+    keypoints2[:, [0, 1]] = keypoints2[:, [1, 0]]
+    keypoints1_pad = pad(keypoints1)
+    keypoints2_pad = pad(keypoints2)
+    
+    max_n_inliers = 0
+    max_inliers = []
+    
+    # Ransac Loop
+    for _ in range(n_iters):
+        n_inliers = 0
+        inliers = []
+        
+        # Randomly pick 4 correspondences
+        rand_corr = matches[np.random.choice(N, 4)]
+        rand_1 = keypoints1[rand_corr[:, 0]]
+        rand_2 = keypoints2[rand_corr[:, 1]]
+        
+        # Compute H using these correspondences
+        H = compute_homography(rand_1, rand_2)
+        
+        # Count the number of inliers
+        # Inliers refers to dist(p1, H.dot(p2)) < threshold
+        # ie H correctly transforms image 2 to fit image 1's matched keypts
+        for i in range(N):
+            p1 = keypoints1_pad[matches[i, 0]]
+            p2 = keypoints2_pad[matches[i, 1]]
+            h_p2 = np.dot(H, p2.transpose()).transpose()
+            dist = np.sqrt(np.sum(np.square(p1 - h_p2)))
+            if dist < threshold:
+                n_inliers += 1
+                inliers.append(i)
+                
+        # Store the max number of inliers
+        if n_inliers > max_n_inliers:
+            max_n_inliers = n_inliers
+            max_inliers = inliers
+    
+    # Recomputing H with all of the max inliers
+    max_matches = matches[max_inliers]
+    max_src = keypoints1[max_matches[:, 0]]
+    max_dst = keypoints2[max_matches[:, 1]]
+    H = compute_homography(max_src, max_dst)
     ### END YOUR CODE
     return H, matches[max_inliers]
 
