@@ -130,24 +130,24 @@ def compute_homography(src, dst):
     
     # Finding the transformation T that normalises the points
     # Compute based on link given in lecture slides
-    m_src = np.average(h_src, axis = 0)
-    s_src = np.std(h_src, axis = 0) / np.sqrt(2)
-    m_dst = np.average(h_dst, axis = 0)
-    s_dst = np.std(h_dst, axis = 0) / np.sqrt(2)
+    m_src = np.mean(h_src, axis = 0)
+    s_src = np.sqrt(2) / np.std(h_src)
+    m_dst = np.mean(h_dst, axis = 0)
+    s_dst = np.sqrt(2) / np.std(h_dst)
     
     T_src = np.array([
-        [1/s_src[0], 0,          -m_src[0]/s_src[0]],
-        [0,          1/s_src[1], -m_src[1]/s_src[1]],
-        [0,          0,          1]
+        [s_src,  0,       -s_src*m_src[0]],
+        [0,      s_src,   -s_src*m_src[1]],
+        [0,      0,       1]
     ])
     T_dst = np.array([
-        [1/s_dst[0], 0,          -m_dst[0]/s_dst[0]],
-        [0,          1/s_dst[1], -m_dst[1]/s_dst[1]],
-        [0,          0,          1]
+        [s_dst,  0,       -s_dst*m_dst[0]],
+        [0,      s_dst,   -s_dst*m_dst[1]],
+        [0,      0,       1]
     ])
     
-    norm_src = np.dot(h_src, T_src.transpose())
-    norm_dst = np.dot(h_dst, T_dst.transpose())
+    norm_src = np.dot(T_src, h_src.transpose()).transpose()
+    norm_dst = np.dot(T_dst, h_dst.transpose()).transpose()
     
     # Standard DLT
     # Setting up matrix A
@@ -160,8 +160,7 @@ def compute_homography(src, dst):
     
     # Performing SVD on A
     u, s, vh = np.linalg.svd(A, full_matrices = True)
-    h = vh[s.argmin()]
-    H = h.reshape((3, 3)).transpose()
+    H = vh[-1].reshape((3, 3))
     
     # Denormalising data
     h_matrix = np.linalg.multi_dot([np.linalg.inv(T_dst), H, T_src])
@@ -353,51 +352,50 @@ def ransac(keypoints1, keypoints2, matches, sampling_ratio=0.5, n_iters=500, thr
     n_inliers = 0
 
     # RANSAC iteration start
-    ### YOUR CODE HERE
-    keypoints1[:, [0, 1]] = keypoints1[:, [1, 0]]
-    keypoints2[:, [0, 1]] = keypoints2[:, [1, 0]]
-    keypoints1_pad = pad(keypoints1)
-    keypoints2_pad = pad(keypoints2)
+    ### YOUR CODE HERE    
     
-    max_n_inliers = 0
-    max_inliers = []
+    # Flip x and y coordinates
+    matched1[:, [0,1]] = matched1[:, [1,0]]
+    matched2[:, [0,1]] = matched2[:, [1,0]]
+    matched1_unpad[:, [0,1]] = matched1_unpad[:, [1,0]]
+    matched2_unpad[:, [0,1]] = matched2_unpad[:, [1,0]]
     
     # Ransac Loop
     for _ in range(n_iters):
-        n_inliers = 0
-        inliers = []
-        
-        # Randomly pick 4 correspondences
-        rand_corr = matches[np.random.choice(N, 4)]
-        rand_1 = keypoints1[rand_corr[:, 0]]
-        rand_2 = keypoints2[rand_corr[:, 1]]
+        # Randomly pick n_samples
+        rand_indices = np.random.choice(N, n_samples)
+        rand_1 = matched1_unpad[rand_indices]
+        rand_2 = matched2_unpad[rand_indices]
         
         # Compute H using these correspondences
-        H = compute_homography(rand_1, rand_2)
+        iter_H = compute_homography(rand_1, rand_2)
         
         # Count the number of inliers
-        # Inliers refers to dist(p1, H.dot(p2)) < threshold
-        # ie H correctly transforms image 2 to fit image 1's matched keypts
+        iter_n_inliers = 0
+        iter_inliers = np.zeros(N)
         for i in range(N):
-            p1 = keypoints1_pad[matches[i, 0]]
-            p2 = keypoints2_pad[matches[i, 1]]
-            h_p2 = np.dot(H, p2.transpose()).transpose()
-            dist = np.sqrt(np.sum(np.square(p1 - h_p2)))
+            p1 = matched1_unpad[i]
+            p2 = matched2[i]
+            p2_prime = np.dot(np.linalg.inv(iter_H), p2.transpose()).transpose()
+            p2_prime = p2_prime[:2] / p2_prime[-1]
+            dist = np.sqrt(np.sum(np.square(p1 - p2_prime)))
+            
             if dist < threshold:
-                n_inliers += 1
-                inliers.append(i)
-                
+                iter_n_inliers += 1
+                iter_inliers[i] = 1
+
         # Store the max number of inliers
-        if n_inliers > max_n_inliers:
-            max_n_inliers = n_inliers
-            max_inliers = inliers
+        if iter_n_inliers > n_inliers:
+            n_inliers = iter_n_inliers
+            max_inliers = iter_inliers
     
     # Recomputing H with all of the max inliers
-    max_matches = matches[max_inliers]
-    max_src = keypoints1[max_matches[:, 0]]
-    max_dst = keypoints2[max_matches[:, 1]]
+    max_inliers = max_inliers.astype(bool)
+    max_src = matched1_unpad[max_inliers]
+    max_dst = matched2_unpad[max_inliers]
     H = compute_homography(max_src, max_dst)
     ### END YOUR CODE
+    
     return H, matches[max_inliers]
 
 
