@@ -442,7 +442,26 @@ def sift_descriptor(patch):
     histogram = np.zeros((4,4,8))
     
     ### YOUR CODE HERE
-    raise NotImplementedError() # Delete this line
+    # get gradient magnitudes and orientation of each pixel
+    # using the formulas in lab pdf
+    m = np.sqrt(dx ** 2 + dy ** 2)
+    t = np.arctan2(dy, dx)  # Array of angles in radians, in the range [-pi, pi].
+
+    for r in range(0, 16, 4):
+        for c in range(0, 16, 4):
+            magnitude = m[r:r+4, c:c+4]
+            theta = t[r:r+4, c:c+4]
+
+            # get histogram of local distribution of gradient magnitudes in 8 orientations
+            local_histogram, _ = np.histogram(theta, bins=8, range=(-np.pi, np.pi),
+                                              weights=magnitude)
+
+            # normalize histogram
+            local_histogram = local_histogram / np.sum(local_histogram)
+
+            histogram[r//4][c//4] = local_histogram
+
+    feature = histogram.reshape(128)
     # END YOUR CODE
     
     return feature
