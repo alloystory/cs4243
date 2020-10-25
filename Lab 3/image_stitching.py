@@ -164,6 +164,9 @@ def compute_homography(src, dst):
     
     # Denormalising data
     h_matrix = np.linalg.multi_dot([np.linalg.inv(T_dst), H, T_src])
+    
+    # Making H affine
+    h_matrix = h_matrix / h_matrix[2, 2]
     ### END YOUR CODE
 
     return h_matrix
@@ -378,7 +381,7 @@ def ransac(keypoints1, keypoints2, matches, sampling_ratio=0.5, n_iters=500, thr
             p2 = matched2[i]
             p2_prime = np.dot(np.linalg.inv(iter_H), p2.transpose()).transpose()
             p2_prime = p2_prime[:2] / p2_prime[-1]
-            dist = np.sqrt(np.sum(np.square(p1 - p2_prime)))
+            dist = np.sum(np.square(p1 - p2_prime))
             
             if dist < threshold:
                 iter_n_inliers += 1
