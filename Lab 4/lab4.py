@@ -28,17 +28,34 @@ def meanShift(dst, track_window, max_iter=100,stop_thresh=1):
     completed_iterations = 0
     
     """ YOUR CODE STARTS HERE """
+    H, W = dst.shape
+    _, _, w, h = track_window
+    wind_coords = np.array([[[x, y] for x in range(w)] for y in range(h)])
 
-
-    
+    while completed_iterations < max_iter:
+        x, y, _, _ = track_window
+        s_h, e_h, s_w, e_w = max(0, y), min(y+h, H), max(0, x), min(x+w, W)
+        
+        roi = dst[s_h:e_h, s_w:e_w]
+        curr_window = wind_coords[s_h-y:e_h-y, s_w-x:e_w-x]
+        curr_wind_mean = np.array([e_w-s_w, e_h-s_h]) / 2
+        
+        total_weights = np.sum(roi)
+        sample_mean_x = np.sum(roi * curr_window[:,:,0]) 
+        sample_mean_y = np.sum(roi * curr_window[:,:,1])
+        sample_mean = np.array([sample_mean_x, sample_mean_y]) / total_weights
+        
+        shift = sample_mean - curr_wind_mean
+        if np.sum(np.square(shift)) < stop_thresh:
+            break
+        
+        track_window = (int(x + shift[0]), int(y + shift[1]), w, h)
+        completed_iterations += 1
 
     """ YOUR CODE ENDS HERE """
     
     return track_window
-    
-    
-    
-        
+       
 
 def IoU(bbox1, bbox2):
     """ Compute IoU of two bounding boxes.
@@ -57,8 +74,14 @@ def IoU(bbox1, bbox2):
 
     """ YOUR CODE STARTS HERE """
 
-
+    bb_h = min(y1+h1-y2, y2+h2-y1)
+    bb_w = min(x1+w1-x2, x2+w2-x1)
+    size1 = h1 * w1
+    size2 = h2 * w2
     
+    intersection = bb_h * bb_w
+    union = size1 + size2 - intersection
+    score = intersection / union
 
     """ YOUR CODE ENDS HERE """
 
@@ -103,9 +126,13 @@ def lucas_kanade(img1, img2, keypoints, window_size=9):
         y, x = int(round(y)), int(round(x))
 
         """ YOUR CODE STARTS HERE """
+        A = np.zeros((9,2))
+        A[:,0] = Ix[y-1:y+2, x-1:x+2].flatten()
+        A[:,1] = Iy[y-1:y+2, x-1:x+2].flatten()
+        b = -It[y-1:y+2, x-1:x+2].flatten()
 
-
-    
+        x, _, _, _ = np.linalg.lstsq(A, b)
+        flow_vectors.append(x)
 
         """ YOUR CODE ENDS HERE """
 
@@ -129,9 +156,10 @@ def compute_error(patch1, patch2):
     error = 0
 
     """ YOUR CODE STARTS HERE """
-
-
+    patch1 = (patch1 - np.mean(patch1)) / np.std(patch1)
+    patch2 = (patch2 - np.mean(patch2)) / np.std(patch2)
     
+    error = np.mean(np.square(patch1 - patch2))
 
     """ YOUR CODE ENDS HERE """
 
