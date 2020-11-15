@@ -229,10 +229,9 @@ def iterative_lucas_kanade(img1, img2, keypoints,
             bk = np.array([[np.sum(temporal_diff * ix)],
                            [np.sum(temporal_diff * iy)]])
 
-            vk = np.dot(G_inverse, bk) # not sure whether output is [vy, vx] or [vx, vy]
+            vk = np.dot(G_inverse, bk)
             vk = np.reshape(vk, 2)
 
-            # vk = np.flip(vk)
             v += vk
         """ YOUR CODE ENDS HERE """
 
