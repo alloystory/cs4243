@@ -207,10 +207,33 @@ def iterative_lucas_kanade(img1, img2, keypoints,
         y1 = int(round(y)); x1 = int(round(x))
         
         """ YOUR CODE STARTS HERE """
+        gx, gy = int(round(gx)), int(round(gy))
+        
+        # Compute spatial gradient matrix
+        ix = Ix[y1-w:y1+w+1, x1-w:x1+w+1]
+        iy = Iy[y1-w:y1+w+1, x1-w:x1+w+1]
+        ix_sqr = np.sum(ix * ix)
+        iy_sqr = np.sum(iy * iy)
+        ixiy = np.sum(ix * iy)
+        G = np.array([[ix_sqr, ixiy],
+                      [ixiy, iy_sqr]])
+        G_inverse = np.linalg.inv(G)
 
+        for _ in range(num_iters):
+            vx, vy = v
+            vx, vy = int(round(vx)), int(round(vy))
 
-    
+            temporal_diff = img1[y1-w:y1+w+1, x1-w:x1+w+1] - \
+                img2[y1+gy+vy-w:y1+gy+vy+w+1, x1+gx+vx-w:x1+gx+vx+w+1]
 
+            bk = np.array([[np.sum(temporal_diff * ix)],
+                           [np.sum(temporal_diff * iy)]])
+
+            vk = np.dot(G_inverse, bk) # not sure whether output is [vy, vx] or [vx, vy]
+            vk = np.reshape(vk, 2)
+
+            # vk = np.flip(vk)
+            v += vk
         """ YOUR CODE ENDS HERE """
 
         vx, vy = v
@@ -251,10 +274,13 @@ def pyramid_lucas_kanade(img1, img2, keypoints,
     g = np.zeros(keypoints.shape)
 
     """ YOUR CODE STARTS HERE """
+    d = np.zeros(keypoints.shape, dtype=int)
+    g = np.zeros(keypoints.shape, dtype=int)
+    ss = [scale**l for l in range(level + 1)]
 
-
-    
-
+    for i, j, sl in zip(pyramid1[::-1], pyramid2[::-1], ss[::-1]):
+        g = scale * (g + d)
+        d = iterative_lucas_kanade(i, j, keypoints / sl, g=g)
     """ YOUR CODE ENDS HERE """
 
     d = g + d
