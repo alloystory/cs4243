@@ -126,13 +126,13 @@ def lucas_kanade(img1, img2, keypoints, window_size=9):
         y, x = int(round(y)), int(round(x))
 
         """ YOUR CODE STARTS HERE """
-        A = np.zeros((9,2))
-        A[:,0] = Ix[y-1:y+2, x-1:x+2].flatten()
-        A[:,1] = Iy[y-1:y+2, x-1:x+2].flatten()
-        b = -It[y-1:y+2, x-1:x+2].flatten()
+        A = np.zeros((window_size**2, 2))
+        A[:,0] = Ix[y-w:y+w+1, x-w:x+w+1].flatten()
+        A[:,1] = Iy[y-w:y+w+1, x-w:x+w+1].flatten()
+        b = -It[y-w:y+w+1, x-w:x+w+1].flatten()
 
-        x, _, _, _ = np.linalg.lstsq(A, b)
-        flow_vectors.append(x)
+        (vx, vy), _, _, _ = np.linalg.lstsq(A, b)
+        flow_vectors.append((vy, vx))
 
         """ YOUR CODE ENDS HERE """
 
